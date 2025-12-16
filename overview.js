@@ -98,7 +98,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  
+  const changeNameBtn = document.getElementById('changeNameBtn');
+  if (changeNameBtn) {
+    changeNameBtn.addEventListener('click', () => {
+      const LS_KEY = 'passportOwnerName';
+      let currentName = null;
+      try {
+        currentName = localStorage.getItem(LS_KEY);
+      } catch (e) {
+        currentName = null;
+      }
+
+      const defaultName = currentName || 'Carpe Diem Passport';
+      const input = prompt('Update passport name:', defaultName);
+      if (!input) return;
+      const nextName = input.trim();
+      if (!nextName) return;
+
+      try {
+        localStorage.setItem(LS_KEY, nextName);
+      } catch (e) {
+        // ignore storage errors
+      }
+
+      alert('Passport name updated. You\'ll see it on the cover next time you open the app.');
+    });
+  }
 
   initOverviewMap().catch(err =>
     console.error('Error during overview init', err)
