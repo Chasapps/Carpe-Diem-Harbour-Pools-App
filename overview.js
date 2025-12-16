@@ -6,6 +6,7 @@
 
 import { loadPools } from './data.js';
 import {
+  LS_KEYS,
   readVisited,
   countVisited
 } from './storage.js';
@@ -98,32 +99,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const changeNameBtn = document.getElementById('changeNameBtn');
-  if (changeNameBtn) {
-    changeNameBtn.addEventListener('click', () => {
-      const LS_KEY = 'passportOwnerName';
-      let currentName = null;
-      try {
-        currentName = localStorage.getItem(LS_KEY);
-      } catch (e) {
-        currentName = null;
-      }
-
-      const defaultName = currentName || 'Carpe Diem Passport';
-      const input = prompt('Update passport name:', defaultName);
-      if (!input) return;
-      const nextName = input.trim();
-      if (!nextName) return;
+  // Reset Profile = clears name + all visited progress on THIS device.
+  // This does NOT affect anyone else and does not change the app code on GitHub.
+  const resetBtn = document.getElementById('resetProfileBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      const ok = confirm(
+        'Reset your profile on this device?\n\nThis will clear:\n• your passport name\n• all visited stamps/dates\n• your current pool selection\n\nIt cannot be undone.'
+      );
+      if (!ok) return;
 
       try {
-        localStorage.setItem(LS_KEY, nextName);
+        // Name key used by the splash/cover
+        localStorage.removeItem('passportOwnerName');
+
+        // App progress keys (see storage.js)
+        localStorage.removeItem(LS_KEYS.VISITED);
+        localStorage.removeItem(LS_KEYS.SELECTION);
+        localStorage.removeItem(LS_KEYS.STAMPS_PAGE);
       } catch (e) {
-        // ignore storage errors
+        // If storage is blocked, at least show a message
+        alert('Could not reset (storage not available).');
+        return;
       }
 
-      alert('Passport name updated. You\'ll see it on the cover next time you open the app.');
+      // Refresh the overview so markers + counts update immediately.
+      window.location.reload();
     });
   }
+
 
   initOverviewMap().catch(err =>
     console.error('Error during overview init', err)
