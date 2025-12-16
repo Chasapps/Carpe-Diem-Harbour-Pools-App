@@ -1,27 +1,3 @@
-/*
-  =============================================================
-  SYDNEY HARBOUR POOLS — MAIN APP LOGIC (app.js)
-  =============================================================
-
-  This file controls:
-  • Pool navigation (prev / next)
-  • Map interaction (Leaflet)
-  • Marking pools as visited
-  • Passport-style stamp rendering (visit order)
-  • All state persistence via localStorage (through storage.js)
-
-  DESIGN PRINCIPLES (important for learners):
-  -------------------------------------------
-  1. All persistent data lives in localStorage (no server).
-  2. Pools are identified by a stable pool.id (never by name).
-  3. The stamps view is derived data — it is rebuilt every render.
-  4. app.js contains UI + orchestration only.
-     Data loading = data.js
-     Persistence   = storage.js
-
-  If something looks "missing", check those files first.
-*/
-
 // app.js (patched to use pool.id + pool.stamp from pools.json)
 // ==========================================================
 // Changes vs your current app.js:
@@ -75,29 +51,6 @@ function formatDateAU(d) {
     return `${day}/${m}/${y}`;
   }
   return d;
-}
-
-/**
- * Show a visible error message in the UI.
- * This is helpful when something fails silently (e.g. opening via file://
- * or missing pools.json / stamps).
- */
-function showFatalError(message, err = null) {
-  try { console.error(message, err); } catch(e) {}
-  const host = document.getElementById('poolList') || document.body;
-  if (!host) return;
-  const div = document.createElement('div');
-  div.className = 'fatal-error';
-  div.innerHTML = `
-    <div class="fatal-error-title">⚠️ App couldn’t load</div>
-    <div class="fatal-error-msg">${message}</div>
-    <div class="fatal-error-hint">
-      Tip: If you opened this as a local file (file://), run a local server (or use GitHub Pages).<br>
-      Also check that <b>pools.json</b> is next to <b>index.html</b> and your stamps are in <b>/stamps</b>.
-    </div>
-  `;
-  host.innerHTML = '';
-  host.appendChild(div);
 }
 
 function updateCount() {
@@ -247,15 +200,8 @@ function changeStampsPage(delta) {
   renderStamps();
 }
 
-/**
- * Resolve the stamp image for a pool.
- * We deliberately derive this from pool.id to avoid path / filename drift.
- * All stamp files should live in /stamps and be named <id>.png
- */
 function getStampSrc(p) {
-  return `stamps/${p.id}.png`;
-}
-.png` : null) || 'stamps/default.png';
+  return p.stamp || (p.id ? `stamps/${p.id}.png` : null) || 'stamps/default.png';
 }
 
 function renderStamps(popId = null) {
@@ -288,7 +234,10 @@ function renderStamps(popId = null) {
 
   grid.innerHTML = '';
 
-  // Passport view only renders VISITED pools, in visit order.
+  // IMPORTANT BEHAVIOUR:
+  // - If a pool is NOT visited, we render an intentionally BLANK slot
+  //   (no name, no stamp art, no "Not stamped" text).
+  // - Visited pools show the stamp + optional date.
   pagePools.forEach(p => {
     const v = visited[p.id];
     const stamped = !!(v && v.done === true);
@@ -373,12 +322,15 @@ async function init() {
   try {
     pools = await loadPools();
   } catch (err) {
-    showFatalError('Failed to load pools.json. This usually means the file is missing or you opened the app without a web server.', err);
+    console.error(err);
+    const list = document.getElementById('poolList');
+    if (list) list.textContent = 'Error loading pools list.';
     return;
   }
 
   if (!pools.length) {
-    showFatalError('pools.json loaded, but it contained zero pools. Check that pools.json is the correct file and contains an array of pools.');
+    const list = document.getElementById('poolList');
+    if (list) list.textContent = 'No pools configured.';
     return;
   }
 
