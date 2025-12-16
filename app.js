@@ -77,6 +77,29 @@ function formatDateAU(d) {
   return d;
 }
 
+/**
+ * Show a visible error message in the UI.
+ * This is helpful when something fails silently (e.g. opening via file://
+ * or missing pools.json / stamps).
+ */
+function showFatalError(message, err = null) {
+  try { console.error(message, err); } catch(e) {}
+  const host = document.getElementById('poolList') || document.body;
+  if (!host) return;
+  const div = document.createElement('div');
+  div.className = 'fatal-error';
+  div.innerHTML = `
+    <div class="fatal-error-title">⚠️ App couldn’t load</div>
+    <div class="fatal-error-msg">${message}</div>
+    <div class="fatal-error-hint">
+      Tip: If you opened this as a local file (file://), run a local server (or use GitHub Pages).<br>
+      Also check that <b>pools.json</b> is next to <b>index.html</b> and your stamps are in <b>/stamps</b>.
+    </div>
+  `;
+  host.innerHTML = '';
+  host.appendChild(div);
+}
+
 function updateCount() {
   const done = countVisited(visited);
   countBadge.textContent = `${done} / ${pools.length}`;
@@ -350,15 +373,12 @@ async function init() {
   try {
     pools = await loadPools();
   } catch (err) {
-    console.error(err);
-    const list = document.getElementById('poolList');
-    if (list) list.textContent = 'Error loading pools list.';
+    showFatalError('Failed to load pools.json. This usually means the file is missing or you opened the app without a web server.', err);
     return;
   }
 
   if (!pools.length) {
-    const list = document.getElementById('poolList');
-    if (list) list.textContent = 'No pools configured.';
+    showFatalError('pools.json loaded, but it contained zero pools. Check that pools.json is the correct file and contains an array of pools.');
     return;
   }
 

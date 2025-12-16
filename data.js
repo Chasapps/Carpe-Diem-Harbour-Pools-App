@@ -7,7 +7,7 @@
 // can key storage by a stable pool.id and render the right stamp artwork.
 
 export async function loadPools() {
-  const response = await fetch('pools.json');
+  const response = await fetch('pools.json', { cache: 'no-store' });
 
   if (!response.ok) {
     throw new Error(`Failed to load pools.json (status ${response.status})`);

@@ -867,3 +867,28 @@ body.full-map #map {
   color: var(--accent-soft);
   font-weight: 800;
 }
+
+/* --------------------------------------------------------------------------
+   FATAL ERROR BANNER (shown when pools.json fails to load)
+   -------------------------------------------------------------------------- */
+.fatal-error{
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+}
+.fatal-error-title{
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.fatal-error-msg{
+  margin-bottom: 8px;
+  opacity: .9;
+}
+.fatal-error-hint{
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: .85;
+}
