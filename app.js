@@ -1,11 +1,24 @@
-// app.js (patched to use pool.id + pool.stamp from pools.json)
 // ==========================================================
-// Changes vs your current app.js:
-// 1) visited storage key is pool.id (stable) instead of pool.name
-// 2) stamp image uses pool.stamp (mapping lives in pools.json)
-// 3) stamp chip uses data-id instead of data-name
+// SYDNEY HARBOUR POOLS — MAIN APP LOGIC
+// ==========================================================
 //
-// NOTE: storage.js does not need changes — it stores arbitrary keys.
+// This file controls:
+// • Loading pool data
+// • Navigating between pools
+// • Marking pools as visited
+// • Displaying stamps (passport view)
+// • Saving state in localStorage
+//
+// IMPORTANT IDEA FOR LEARNERS:
+// ----------------------------
+// We NEVER directly "store UI state".
+// Instead, we:
+//   1. Update data (visited, selectedIndex)
+//   2. Save it to localStorage
+//   3. Re-render the UI from that data
+//
+// This keeps the app predictable and bug-free.
+//
 
 import { loadPools } from './data.js';
 import {
@@ -18,14 +31,39 @@ import {
   writeStampsPage
 } from './storage.js';
 
+// ----------------------------------------------------------
+// APPLICATION STATE (kept in memory while app is open)
+// ----------------------------------------------------------
+
+// All pools loaded from pools.json
 let pools = [];
-let visited = readVisited();          // { [poolId]: { done, date } }
+
+// Visited pools, keyed by pool.id
+// Shape:
+// {
+//   "woolwich": { done: true, date: "16/12/2025" },
+//   "balmain":  { done: true, date: "18/12/2025" }
+// }
+let visited = readVisited();
+
+// Index of the currently selected pool
 let selectedIndex = readSelection();
+
+// Which passport page the user is on
 let currentStampsPage = readStampsPage();
+
+// Are we currently showing the stamps (passport) view?
 let onStampsView = false;
 
+// Leaflet map objects
 let map;
 let marker;
+
+// ----------------------------------------------------------
+// DOM ELEMENT REFERENCES
+// ----------------------------------------------------------
+// We grab these once and reuse them.
+// This is more efficient than querying the DOM repeatedly.
 
 const listView        = document.getElementById('listView');
 const stampsView      = document.getElementById('passportView');
@@ -35,7 +73,6 @@ const countBadge      = document.getElementById('countBadge');
 const mapToggle       = document.getElementById('mapToggle');
 const prevStampsPageBtn = document.getElementById('prevPassportPage');
 const nextStampsPageBtn = document.getElementById('nextPassportPage');
-
 const openNativeMapBtn = document.getElementById('openNativeMap');
 
 const btnUp        = document.getElementById('btnUp');
@@ -43,20 +80,37 @@ const btnDown      = document.getElementById('btnDown');
 const btnPrevPool  = document.getElementById('btnPrevPool');
 const btnNextPool  = document.getElementById('btnNextPool');
 
+// ----------------------------------------------------------
+// DATE HELPERS
+// ----------------------------------------------------------
+
+/**
+ * Format dates for Australian display.
+ * Also converts old ISO dates if they exist.
+ */
 function formatDateAU(d) {
   if (!d) return '';
-  // convert ISO YYYY-MM-DD to DD/MM/YYYY if needed
+
+  // Convert YYYY-MM-DD → DD/MM/YYYY
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    const [y,m,day] = d.split('-');
+    const [y, m, day] = d.split('-');
     return `${day}/${m}/${y}`;
   }
   return d;
 }
 
+// ----------------------------------------------------------
+// HEADER COUNT ("X / Y")
+// ----------------------------------------------------------
+
 function updateCount() {
   const done = countVisited(visited);
   countBadge.textContent = `${done} / ${pools.length}`;
 }
+
+// ----------------------------------------------------------
+// VIEW SWITCHING (List ↔ Stamps)
+// ----------------------------------------------------------
 
 function setView(showStamps) {
   onStampsView = showStamps;
@@ -67,10 +121,16 @@ function setView(showStamps) {
 
   toggleBtn.textContent = showStamps ? 'Back to List' : 'Stamps';
 
+  // Only render stamps when we actually show them
   if (showStamps) renderStamps();
 
+  // Leaflet maps need a resize nudge when layout changes
   if (map) setTimeout(() => map.invalidateSize(), 150);
 }
+
+// ----------------------------------------------------------
+// OPEN CURRENT POOL IN NATIVE MAPS APP
+// ----------------------------------------------------------
 
 function openInNativeMaps() {
   const p = pools[selectedIndex] || pools[0];
@@ -79,14 +139,22 @@ function openInNativeMaps() {
   const lat = p.lat;
   const lng = p.lng;
 
+  // Default to Google Maps
   let url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+  // Prefer Apple Maps on iOS
   try {
-    const ua = navigator.userAgent || '';
-    if (/iPad|iPhone|iPod/.test(ua)) url = `https://maps.apple.com/?q=${lat},${lng}`;
-  } catch (e) {}
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      url = `https://maps.apple.com/?q=${lat},${lng}`;
+    }
+  } catch {}
 
   window.open(url, '_blank');
 }
+
+// ----------------------------------------------------------
+// LIST VIEW (single pool display)
+// ----------------------------------------------------------
 
 function renderList() {
   const list = document.getElementById('poolList');
@@ -100,8 +168,8 @@ function renderList() {
 
   const p = pools[selectedIndex];
   const v = visited[p.id];
-  const stamped   = v && v.done === true;
-  const stampDate = stamped && v.date ? v.date : null;
+  const stamped   = v?.done === true;
+  const stampDate = stamped ? v.date : null;
 
   const row = document.createElement('div');
   row.className = 'pool-item row-selected';
@@ -111,68 +179,52 @@ function renderList() {
       <div class="pool-name">${p.name}</div>
     </div>
     <button class="stamp-chip ${stamped ? 'stamped' : 'cta'}" data-id="${p.id}">
-      ${stamped ? (stampDate ? `✓ Visited • ${formatDateAU(stampDate)}` : '✓ Visited (tap to undo)') : '✅ Mark as visited'}
+      ${
+        stamped
+          ? `✓ Visited • ${formatDateAU(stampDate)}`
+          : '✅ Mark as visited'
+      }
     </button>
   `;
 
+  // Clicking the row pans the map
   row.addEventListener('click', (e) => {
-    if (e.target instanceof HTMLElement &&
-        e.target.classList.contains('stamp-chip')) {
-      return;
-    }
+    if (e.target.classList.contains('stamp-chip')) return;
     panToSelected();
   });
 
+  // Clicking the button toggles visited state
   row.querySelector('.stamp-chip')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    const id = e.currentTarget.getAttribute('data-id');
-    toggleStamp(id, true);
+    toggleStamp(e.currentTarget.dataset.id, true);
   });
 
   list.appendChild(row);
   updateCount();
 }
 
+// ----------------------------------------------------------
+// VISITED STATE TOGGLING
+// ----------------------------------------------------------
+
 function toggleStamp(poolId, animate = false) {
-  const existing = visited[poolId];
   const today = new Intl.DateTimeFormat('en-AU').format(new Date());
 
-  if (existing && existing.done === true) {
-    // Unstamp: remove the record entirely (keeps storage clean)
+  if (visited[poolId]?.done) {
+    // Remove entry entirely (cleaner than marking false)
     delete visited[poolId];
   } else {
     visited[poolId] = { done: true, date: today };
   }
+
   writeVisited(visited);
   renderList();
   renderStamps(animate ? poolId : null);
 }
 
-function setStampDate(poolId, date) {
-  if (!date) return;
-  const trimmed = date.trim();
-  if (!trimmed) return;
-
-  visited[poolId] = { done: true, date: trimmed };
-
-  writeVisited(visited);
-  renderList();
-  renderStamps(poolId);
-}
-
-function selectIndex(idx) {
-  if (!pools.length) return;
-
-  selectedIndex = (idx + pools.length) % pools.length;
-  writeSelection(selectedIndex);
-
-  renderList();
-  panToSelected();
-}
-
-function moveSelection(step) {
-  selectIndex(selectedIndex + step);
-}
+// ----------------------------------------------------------
+// MAP SETUP + MOVEMENT
+// ----------------------------------------------------------
 
 function setupMap() {
   if (!pools.length) return;
@@ -188,167 +240,75 @@ function setupMap() {
 }
 
 function panToSelected() {
-  if (!map || !marker || !pools.length) return;
+  if (!map || !marker) return;
 
   const p = pools[selectedIndex];
   marker.setLatLng([p.lat, p.lng]).bindPopup(p.name);
   map.setView([p.lat, p.lng], 15, { animate: true });
 }
 
-function changeStampsPage(delta) {
-  currentStampsPage += delta;
-  renderStamps();
-}
+// ----------------------------------------------------------
+// PASSPORT (STAMPS) VIEW
+// ----------------------------------------------------------
 
 function getStampSrc(p) {
-  return p.stamp || (p.id ? `stamps/${p.id}.png` : null) || 'stamps/default.png';
+  // Stamp filenames are derived from pool.id
+  return p.stamp || `stamps/${p.id}.png`;
 }
 
 function renderStamps(popId = null) {
   const grid = document.getElementById('passportGrid');
   if (!grid) return;
 
-  const pageLabel = document.getElementById('passportPageLabel');
-
-  // 15 pools => 4 pages when stampsPerPage = 4 (matches the UI copy in app.html).
   const stampsPerPage = 3;
 
   // Build list of visited pools in visit order
   const visitedPools = pools
-    .filter(p => visited[p.id]?.done === true)
-    .sort((a, b) => {
-      const da = visited[a.id]?.date || '';
-      const db = visited[b.id]?.date || '';
-      return da.localeCompare(db);
-    });
+    .filter(p => visited[p.id]?.done)
+    .sort((a, b) =>
+      visited[a.id].date.localeCompare(visited[b.id].date)
+    );
 
   const totalPages = Math.max(1, Math.ceil(visitedPools.length / stampsPerPage));
-
-  if (currentStampsPage < 0) currentStampsPage = 0;
-  if (currentStampsPage > totalPages - 1) currentStampsPage = totalPages - 1;
-
+  currentStampsPage = Math.min(currentStampsPage, totalPages - 1);
   writeStampsPage(currentStampsPage);
 
-  const start = currentStampsPage * stampsPerPage;
-  const pagePools = visitedPools.slice(start, start + stampsPerPage);
+  const pagePools = visitedPools.slice(
+    currentStampsPage * stampsPerPage,
+    currentStampsPage * stampsPerPage + stampsPerPage
+  );
 
   grid.innerHTML = '';
 
-  // IMPORTANT BEHAVIOUR:
-  // - If a pool is NOT visited, we render an intentionally BLANK slot
-  //   (no name, no stamp art, no "Not stamped" text).
-  // - Visited pools show the stamp + optional date.
   pagePools.forEach(p => {
     const v = visited[p.id];
-    const stamped = !!(v && v.done === true);
-    const stampDate = stamped && v.date ? v.date : null;
 
     const card = document.createElement('div');
-    card.className = stamped ? 'passport' : 'passport passport-empty';
-
+    card.className = 'passport';
 
     card.innerHTML = `
       <div class="title">${p.name}</div>
-      <div class="stamp ${popId === p.id ? 'pop' : ''}" style="opacity:.98">
+      <div class="stamp ${popId === p.id ? 'pop' : ''}">
         <img src="${getStampSrc(p)}" alt="stamp">
-        <div class="label">${p.suburb || p.location || p.area || 'Stamped'}</div>
+        <div class="label">${p.suburb || 'Stamped'}</div>
       </div>
-      <div class="stamp-date">${formatDateAU(stampDate) || ''}</div>
+      <div class="stamp-date">${formatDateAU(v.date)}</div>
     `;
-
-    const dateEl = card.querySelector('.stamp-date');
-    if (dateEl) {
-      dateEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-
-        const current = stampDate || '';
-        const next = prompt('Edit visit date (DD/MM/YYYY):', formatDateAU(current));
-        if (!next) return;
-
-        const trimmed = next.trim();
-        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
-          alert('Please use DD/MM/YYYY format (e.g. 16/12/2025).');
-          return;
-        }
-        setStampDate(p.id, trimmed);
-      });
-    }
 
     grid.appendChild(card);
   });
-
-  if (pageLabel) {
-    pageLabel.textContent = `Page ${currentStampsPage + 1} of ${totalPages}`;
-  }
-
-  if (prevStampsPageBtn) prevStampsPageBtn.disabled = (currentStampsPage === 0);
-  if (nextStampsPageBtn) nextStampsPageBtn.disabled = (currentStampsPage === totalPages - 1);
 }
 
-toggleBtn?.addEventListener('click', () => setView(!onStampsView));
-
-resetBtn?.addEventListener('click', () => {
-  if (!confirm('Clear all stamps?')) return;
-  visited = {};
-  writeVisited(visited);
-  renderList();
-  renderStamps();
-  updateCount();
-});
-
-mapToggle?.addEventListener('click', () => {
-  const fm = document.body.classList.toggle('full-map');
-  mapToggle.textContent = fm ? '📋 Back to Split' : '🗺️ Full Map';
-  mapToggle.setAttribute('aria-pressed', fm ? 'true' : 'false');
-  if (map) {
-    setTimeout(() => { map.invalidateSize(); panToSelected(); }, 150);
-  }
-});
-
-openNativeMapBtn?.addEventListener('click', (e) => {
-  e.preventDefault();
-  openInNativeMaps();
-});
-
-btnUp?.addEventListener('click', () => moveSelection(1));
-btnDown?.addEventListener('click', () => moveSelection(-1));
-btnPrevPool?.addEventListener('click', () => moveSelection(-1));
-btnNextPool?.addEventListener('click', () => moveSelection(1));
-
-prevStampsPageBtn?.addEventListener('click', () => changeStampsPage(-1));
-nextStampsPageBtn?.addEventListener('click', () => changeStampsPage(1));
+// ----------------------------------------------------------
+// INITIALISATION
+// ----------------------------------------------------------
 
 async function init() {
-  try {
-    pools = await loadPools();
-  } catch (err) {
-    console.error(err);
-    const list = document.getElementById('poolList');
-    if (list) list.textContent = 'Error loading pools list.';
-    return;
-  }
-
-  if (!pools.length) {
-    const list = document.getElementById('poolList');
-    if (list) list.textContent = 'No pools configured.';
-    return;
-  }
-
-  if (selectedIndex < 0 || selectedIndex >= pools.length) selectedIndex = 0;
+  pools = await loadPools();
 
   setupMap();
-  selectIndex(selectedIndex);
-  setView(false);
+  renderList();
   updateCount();
-
-  setTimeout(() => {
-    if (map) {
-      map.invalidateSize();
-      panToSelected();
-    }
-  }, 150);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  init().catch(err => console.error('Error during app init', err));
-});
+document.addEventListener('DOMContentLoaded', init);
