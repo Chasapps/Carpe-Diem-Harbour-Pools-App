@@ -99,35 +99,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Reset Profile = clears name + all visited progress on THIS device.
-  // This does NOT affect anyone else and does not change the app code on GitHub.
-  const resetBtn = document.getElementById('resetProfileBtn');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      const ok = confirm(
-        'Reset your profile on this device?\n\nThis will clear:\n• your passport name\n• all visited stamps/dates\n• your current pool selection\n\nIt cannot be undone.'
-      );
-      if (!ok) return;
+// Reset profile = clears passport name + all progress on THIS device.
+// It does not affect the GitHub site or anyone else’s passport.
+const resetBtn = document.getElementById('resetProfileBtn');
+if (resetBtn) {
+  resetBtn.addEventListener('click', () => {
+    const ok = confirm(
+      'Reset your profile on this device?\n\nThis will clear:\n• your passport name\n• all visited stamps/dates\n• your current pool selection\n• your stamps page\n\nIt cannot be undone.'
+    );
+    if (!ok) return;
 
+    try {
+      // Name key used by the splash / cover
+      localStorage.removeItem('passportOwnerName');
+
+      // App progress keys (defined in storage.js)
+      localStorage.removeItem(LS_KEYS.VISITED);
+      localStorage.removeItem(LS_KEYS.SELECTION);
+      localStorage.removeItem(LS_KEYS.STAMPS_PAGE);
+    } catch (e) {
+      alert('Could not reset (storage not available).');
+      return;
+    }
+
+    // Reload so the overview badge + markers update immediately.
+    window.location.reload();
+  });
+}
+
+  const changeNameBtn = document.getElementById('changeNameBtn');
+  if (changeNameBtn) {
+    changeNameBtn.addEventListener('click', () => {
+      const LS_KEY = 'passportOwnerName';
+      let currentName = null;
       try {
-        // Name key used by the splash/cover
-        localStorage.removeItem('passportOwnerName');
-
-        // App progress keys (see storage.js)
-        localStorage.removeItem(LS_KEYS.VISITED);
-        localStorage.removeItem(LS_KEYS.SELECTION);
-        localStorage.removeItem(LS_KEYS.STAMPS_PAGE);
+        currentName = localStorage.getItem(LS_KEY);
       } catch (e) {
-        // If storage is blocked, at least show a message
-        alert('Could not reset (storage not available).');
-        return;
+        currentName = null;
       }
 
-      // Refresh the overview so markers + counts update immediately.
-      window.location.reload();
+      const defaultName = currentName || 'Carpe Diem Passport';
+      const input = prompt('Update passport name:', defaultName);
+      if (!input) return;
+      const nextName = input.trim();
+      if (!nextName) return;
+
+      try {
+        localStorage.setItem(LS_KEY, nextName);
+      } catch (e) {
+        // ignore storage errors
+      }
+
+      alert('Passport name updated. You\'ll see it on the cover next time you open the app.');
     });
   }
-
 
   initOverviewMap().catch(err =>
     console.error('Error during overview init', err)
