@@ -6,7 +6,6 @@
 
 import { loadPools } from './data.js';
 import {
-  LS_KEYS,
   readVisited,
   countVisited
 } from './storage.js';
@@ -99,34 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-// Reset profile = clears passport name + all progress on THIS device.
-// It does not affect the GitHub site or anyone else’s passport.
-const resetBtn = document.getElementById('resetProfileBtn');
-if (resetBtn) {
-  resetBtn.addEventListener('click', () => {
-    const ok = confirm(
-      'Reset your profile on this device?\n\nThis will clear:\n• your passport name\n• all visited stamps/dates\n• your current pool selection\n• your stamps page\n\nIt cannot be undone.'
-    );
-    if (!ok) return;
-
-    try {
-      // Name key used by the splash / cover
-      localStorage.removeItem('passportOwnerName');
-
-      // App progress keys (defined in storage.js)
-      localStorage.removeItem(LS_KEYS.VISITED);
-      localStorage.removeItem(LS_KEYS.SELECTION);
-      localStorage.removeItem(LS_KEYS.STAMPS_PAGE);
-    } catch (e) {
-      alert('Could not reset (storage not available).');
-      return;
-    }
-
-    // Reload so the overview badge + markers update immediately.
-    window.location.reload();
-  });
-}
-
   const changeNameBtn = document.getElementById('changeNameBtn');
   if (changeNameBtn) {
     changeNameBtn.addEventListener('click', () => {
@@ -157,4 +128,40 @@ if (resetBtn) {
   initOverviewMap().catch(err =>
     console.error('Error during overview init', err)
   );
+// Reset profile (device-local):
+// Clears the passport owner name + all progress (stamps/dates/selection).
+// This does NOT affect the GitHub site or anyone else.
+const resetProfileBtn = document.getElementById('resetProfileBtn');
+if (resetProfileBtn) {
+  resetProfileBtn.addEventListener('click', () => {
+    const ok = confirm(
+      'Reset your profile on this device?
+
+This will clear:
+• your passport name
+• all visited stamps/dates
+• your current pool selection
+• your stamps page
+
+It cannot be undone.'
+    );
+    if (!ok) return;
+
+    try {
+      // Name key
+      localStorage.removeItem('passportOwnerName');
+
+      // Progress keys (must match storage.js)
+      localStorage.removeItem('harbour_pools_visited_v2_3');
+      localStorage.removeItem('harbour_pools_selected_v2_3');
+      localStorage.removeItem('harbour_pools_stamps_page_v1');
+    } catch (e) {
+      alert('Could not reset (storage not available).');
+      return;
+    }
+
+    window.location.reload();
+  });
+}
+
 });
