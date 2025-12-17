@@ -451,7 +451,7 @@ body.full-map #map {
 
 /* Make passport stamps larger */
 .passport .stamp img {
-  width: 100px;      /* was ~80px */
+  width: 80px;      /* was ~80px */
   height: auto;
 }
 
