@@ -274,7 +274,7 @@ function renderStamps(popId = null) {
   const grid = document.getElementById('passportGrid');
   if (!grid) return;
 
-  const stampsPerPage = 3;
+  const stampsPerPage = 2;
 
   // Build list of visited pools in visit order
   const visitedPools = pools
