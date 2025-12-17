@@ -447,14 +447,11 @@ body.full-map #map {
   position: relative; /* for on-stamp date */
 }
 
-.passport .stamp img {
-  width: 44px;
-  height: 44px;
-}
+
 
 /* Make passport stamps larger */
 .passport .stamp img {
-  width: 120px;      /* was ~80px */
+  width: 100px;      /* was ~80px */
   height: auto;
 }
 
