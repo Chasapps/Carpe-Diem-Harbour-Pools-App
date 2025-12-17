@@ -99,6 +99,20 @@ function formatDateAU(d) {
   return d;
 }
 
+// Turn a stored date into a sortable key (YYYYMMDD).
+function dateKey(d) {
+  if (!d) return '';
+  // If already ISO.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.replace(/-/g, '');
+  // If AU format DD/MM/YYYY.
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) {
+    const [day, month, year] = d.split('/');
+    return `${year}${month}${day}`;
+  }
+  // Fallback: strip non-digits.
+  return String(d).replace(/\D/g, '');
+}
+
 // ----------------------------------------------------------
 // HEADER COUNT ("X / Y")
 // ----------------------------------------------------------
@@ -273,6 +287,15 @@ function renderStamps(popId = null) {
   currentStampsPage = Math.min(currentStampsPage, totalPages - 1);
   writeStampsPage(currentStampsPage);
 
+  const labelEl = document.getElementById('passportPageLabel');
+  if (labelEl) {
+    labelEl.textContent = `Page ${currentStampsPage + 1} of ${totalPages}`;
+  }
+
+  if (prevStampsPageBtn) prevStampsPageBtn.disabled = currentStampsPage <= 0;
+  if (nextStampsPageBtn) nextStampsPageBtn.disabled = currentStampsPage >= totalPages - 1;
+
+
   const pagePools = visitedPools.slice(
     currentStampsPage * stampsPerPage,
     currentStampsPage * stampsPerPage + stampsPerPage
@@ -306,8 +329,86 @@ function renderStamps(popId = null) {
 async function init() {
   pools = await loadPools();
 
+  // Keep selection in bounds (in case pools list changed)
+  if (selectedIndex < 0) selectedIndex = 0;
+  if (selectedIndex >= pools.length) selectedIndex = Math.max(0, pools.length - 1);
+
+  // --------------------------
+  // Button wiring
+  // --------------------------
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => setView(!onStampsView));
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      const ok = confirm('Reset all visited stamps on this device?');
+      if (!ok) return;
+
+      visited = {};
+      writeVisited(visited);
+      currentStampsPage = 0;
+      writeStampsPage(currentStampsPage);
+
+      renderList();
+      renderStamps();
+      updateCount();
+    });
+  }
+
+  if (btnUp) {
+    btnUp.addEventListener('click', () => {
+      if (!pools.length) return;
+      selectedIndex = (selectedIndex + 1) % pools.length;
+      writeSelection(selectedIndex);
+      renderList();
+      panToSelected();
+    });
+  }
+
+  if (btnDown) {
+    btnDown.addEventListener('click', () => {
+      if (!pools.length) return;
+      selectedIndex = (selectedIndex - 1 + pools.length) % pools.length;
+      writeSelection(selectedIndex);
+      renderList();
+      panToSelected();
+    });
+  }
+
+  if (openNativeMapBtn) {
+    openNativeMapBtn.addEventListener('click', openInNativeMaps);
+  }
+
+  if (mapToggle) {
+    mapToggle.addEventListener('click', () => {
+      document.body.classList.toggle('full-map');
+      if (map) setTimeout(() => map.invalidateSize(), 150);
+    });
+  }
+
+  if (prevStampsPageBtn) {
+    prevStampsPageBtn.addEventListener('click', () => {
+      currentStampsPage = Math.max(0, currentStampsPage - 1);
+      writeStampsPage(currentStampsPage);
+      renderStamps();
+    });
+  }
+
+  if (nextStampsPageBtn) {
+    nextStampsPageBtn.addEventListener('click', () => {
+      currentStampsPage = currentStampsPage + 1;
+      writeStampsPage(currentStampsPage);
+      renderStamps();
+    });
+  }
+
+  // --------------------------
+  // First render
+  // --------------------------
   setupMap();
   renderList();
+  panToSelected();
   updateCount();
 }
 
