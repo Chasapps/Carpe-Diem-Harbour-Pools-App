@@ -119,4 +119,13 @@
     "lng": 151.170644,
     "stamp": "stamps/balmain.png"
   }
+  {
+  "id": "putney-beach",
+  "name": "Putney Beach, Putney",
+  "suburb": "Putney",
+  "lat": -33.82563,
+  "lng": 151.10642,
+  "stamp": "stamps/putney-beach.png"
+}
+
 ]
